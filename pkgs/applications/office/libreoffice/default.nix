@@ -1,6 +1,7 @@
 { stdenv
 , fetchurl
 , fetchpatch
+, fetchFromGitHub
 , lib
 , substituteAll
 , pam
@@ -131,7 +132,7 @@
 , sonnet ? null
 } @ args:
 
-assert builtins.elem variant [ "fresh" "still" ];
+assert builtins.elem variant [ "fresh" "still" "collabora" ];
 
 let
   inherit (lib)
@@ -149,7 +150,7 @@ let
   # nix-shell maintainers/scripts/update.nix --argstr package libreoffice-$VARIANT.unwrapped
   version = importVariant "version.nix";
   srcsAttributes = {
-    main = importVariant "main.nix";
+    main = importVariant "main.nix" {inherit fetchurl fetchFromGitHub;} ;
     help = importVariant "help.nix";
     translations = importVariant "translations.nix";
     deps = (importVariant "deps.nix") ++ [
@@ -189,10 +190,13 @@ let
   };
   tarballPath = "external/tarballs";
 
+  autogen_arguments = if variant == "collabora" then "--with-distro=CPLinux-LOKit --without-package-format" else "";
+
 in stdenv.mkDerivation (finalAttrs: {
   pname = "libreoffice";
   inherit version;
-  src = fetchurl srcsAttributes.main;
+  src = srcsAttributes.main;
+  outputs = ["out"] ++ optionals (variant == "collabora") ["dev"];
 
   env.NIX_CFLAGS_COMPILE = toString ([
     "-I${librdf_rasqal}/include/rasqal" # librdf_redland refers to rasqal.h instead of rasqal/rasqal.h
@@ -220,13 +224,14 @@ in stdenv.mkDerivation (finalAttrs: {
     # cbfac11330882c7d0a817b6c37a08b2ace2b66f4
     ./0001-Strip-away-BUILDCONFIG.patch
 
+   ]
+   ++ optionals (variant != "collabora") [
     # Backport fix for tests broken by expired test certificates.
-    (fetchpatch {
+     (fetchpatch {
       url = "https://cgit.freedesktop.org/libreoffice/core/patch/?id=ececb678b8362e3be8e02768ddd5e4197d87dc2a";
       hash = "sha256-TUfKlwNxUTOJ95VLqwVD+ez1xhu7bW6xZlgIaCyIiNg=";
     })
   ];
-
   # libreoffice tries to reference the BUILDCONFIG (e.g. PKG_CONFIG_PATH)
   # in the binary causing the closure size to blow up because of many unnecessary
   # dependencies to dev outputs. This behavior was patched away in nixpkgs
@@ -286,7 +291,7 @@ in stdenv.mkDerivation (finalAttrs: {
     sed -e '/include/i<include>${carlito}/etc/fonts/conf.d</include>' -i fonts.conf
     export FONTCONFIG_FILE="$PWD/fonts.conf"
 
-    NOCONFIGURE=1 ./autogen.sh
+    NOCONFIGURE=1 ./autogen.sh ${autogen_arguments}
   '';
 
   postConfigure = ''
@@ -400,15 +405,21 @@ in stdenv.mkDerivation (finalAttrs: {
 
   buildTargets = [ "build-nocheck" ];
 
-  doCheck = true;
+  doCheck = variant != "collabora";
 
   # It installs only things to $out/lib/libreoffice
   postInstall = ''
     mkdir -p $out/share
-    ln -s $out/lib/libreoffice/share/xdg $out/share/applications
 
     cp -r sysui/desktop/icons  "$out/share"
+  '' + optionalString (variant != "collabora") ''
+    ln -s $out/lib/libreoffice/share/xdg $out/share/applications
     sed -re 's@Icon=libreoffice(dev)?[0-9.]*-?@Icon=@' -i "$out/share/applications/"*.desktop
+  '' + optionalString (variant == "collabora") ''
+    ln -s $out/lib/collabora/share/xdg $out/share/applications
+    #sed -re 's@Icon=libreoffice(dev)?[0-9.]*-?@Icon=@' -i "$out/share/applications/"*.desktop
+    mkdir $dev
+    cp -r $src/include $dev
   '';
 
   # Wrapping is done in ./wrapper.nix
@@ -472,10 +483,13 @@ in stdenv.mkDerivation (finalAttrs: {
     "--without-system-dragonbox"
     "--without-system-libfixmath"
   # the "still" variant doesn't support Nixpkgs' mdds 2.1, only mdds 2.0
-  ] ++ optionals (variant == "still") [
+  ] ++ optionals (variant == "still" || variant == "collabora") [
     "--without-system-mdds"
   ] ++ optionals (variant == "fresh") [
     "--with-system-mdds"
+  ] ++ optionals (variant == "collabora") [
+    # only a webui is needed for collabora
+    #"--disable-gui"
   ] ++ [
     # https://github.com/NixOS/nixpkgs/commit/5c5362427a3fa9aefccfca9e531492a8735d4e6f
     "--without-system-orcus"

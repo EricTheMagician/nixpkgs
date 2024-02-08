@@ -33330,6 +33330,15 @@ with pkgs;
     };
     boost = boost179;
   };
+  libreoffice-collabora = lowPrio (callPackage ../applications/office/libreoffice/wrapper.nix {
+    unwrapped = callPackage ../applications/office/libreoffice
+      (libreoffice-args // {
+        variant = "collabora";
+        withHelp = false;
+      });
+  });
+  libreoffice-collabora-unwrapped = libreoffice-collabora.unwrapped;
+  collabora  = callPackage ../applications/office/collabora {};
 
   libreoffice-qt = lowPrio (callPackage ../applications/office/libreoffice/wrapper.nix {
     unwrapped = libsForQt5.callPackage ../applications/office/libreoffice
