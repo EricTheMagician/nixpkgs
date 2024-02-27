@@ -1,22 +1,37 @@
 { lib
 , fetchFromGitHub
 , mkYarnPackage
-, mkYarnModules
 , nodePackages
 , openssl
 , prisma-engines
+, python3
+, nodejs
 , ...
 }:
 mkYarnPackage rec {
   pname = "linkwarden";
   version = "2.4.9";
   # yarnFlags = [ "--production=false" ];
-  extraBuildInputs = [ nodePackages.prisma prisma-engines openssl ];
+
+  # nativeBuildInputs = [nodePackages.node-gyp]; # needed for bcrypt
+  extraBuildInputs = [
+    nodePackages.prisma
+    prisma-engines
+    openssl
+  ];
   src = fetchFromGitHub {
     owner = "linkwarden";
     repo = "linkwarden";
     rev = "refs/tags/v${version}";
     hash = "sha256-oSt7po/5vbxHtq96x0Oq/c9tc/jtBxouxKLpSkI7UWo=";
+  };
+  pkgConfig = {
+    bcrypt = {
+      nativeBuildInputs = [ nodePackages.node-gyp nodePackages.node-gyp-build nodePackages.node-pre-gyp nodejs python3 ];
+      postInstall = ''
+        yarn --offline run install --nodedir=${nodejs}
+      '';
+    };
   };
   doDist = false;
   configurePhase = ''
@@ -31,7 +46,6 @@ mkYarnPackage rec {
   '';
   buildPhase = ''
     runHook preBuild
-
     yarn --offline run build
     runHook postBuild
   '';
