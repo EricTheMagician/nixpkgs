@@ -2398,6 +2398,12 @@ self: super: with self; {
 
   conda = callPackage ../development/python-modules/conda { };
 
+  conda-libmamba-solver = callPackage ../development/python-modules/conda-libmamba-solver { };
+
+  conda-package-handling = callPackage ../development/python-modules/conda-package-handling { };
+
+  conda-package-streaming = callPackage ../development/python-modules/conda-package-streaming { };
+
   confection = callPackage ../development/python-modules/confection { };
 
   configargparse = callPackage ../development/python-modules/configargparse { };
@@ -6612,6 +6618,8 @@ self: super: with self; {
   liblzfse = callPackage ../development/python-modules/liblzfse {
     inherit (pkgs) lzfse;
   };
+
+  libmambapy = callPackage ../development/python-modules/libmambapy { };
 
   libmodulemd = lib.pipe pkgs.libmodulemd [
     toPythonModule
