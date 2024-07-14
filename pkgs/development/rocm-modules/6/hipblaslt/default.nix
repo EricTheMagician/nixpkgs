@@ -6,16 +6,22 @@
   rocm-cmake,
   clr,
   gfortran,
+  # rocblas,
+  # rocsolver,
+  hipblas,
+  rocmUpdateScript,
+  msgpack,
+  python3,
 }:
 
-stdenv.mkDerivation rec {
+stdenv.mkDerivation (finalAttrs: {
   pname = "hipblaslt";
   version = "6.0.2";
 
   src = fetchFromGitHub {
     owner = "ROCm";
     repo = "hipBLASLt";
-    rev = "rocm-${version}";
+    rev = "rocm-${finalAttrs.version}";
     hash = "sha256-ZXiq5e6C7MU0nTpill/jCsjt1y3vwdt2xrrqCA6cCtw=";
   };
 
@@ -23,8 +29,17 @@ stdenv.mkDerivation rec {
     cmake
     rocm-cmake
     clr
-    gfortran
+    # gfortran
+    (python3.withPackages (p: [
+      p.joblib
+      p.pyyaml
+      p.msgpack
+    ]))
+  ];
 
+  buildInputs = [
+    msgpack
+    hipblas
   ];
 
   meta = with lib; {
@@ -39,4 +54,4 @@ stdenv.mkDerivation rec {
       || versionAtLeast finalAttrs.version "7.0.0";
     platforms = platforms.all;
   };
-}
+})

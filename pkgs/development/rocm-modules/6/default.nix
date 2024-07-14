@@ -235,7 +235,7 @@ in rec {
   };
 
   hipblaslt = callPackage ./hipblaslt {
-    inherit rocmUpdateScript rocm-cmake rocblas rocsolver clr;
+    inherit rocmUpdateScript rocm-cmake hipblas clr;
     stdenv = llvm.rocmClangStdenv;
   };
 
