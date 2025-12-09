@@ -37,6 +37,11 @@ let
     dbms.ssl.policy.${name}.trusted_dir=${conf.trustedDir}
   '') cfg.ssl.policies;
 
+  pluginsDir = pkgs.symlinkJoin {
+    name = "neo4j-plugins";
+    paths = cfg.plugins;
+  };
+
   serverConfig = pkgs.writeText "neo4j.conf" ''
     # General
     server.default_listen_address=${cfg.defaultListenAddress}
@@ -47,7 +52,14 @@ let
 
     # Directories (readonly)
     # dbms.directories.certificates=${cfg.directories.certificates}
-    server.directories.plugins=${cfg.directories.plugins}
+    server.directories.plugins=${
+      if cfg.plugins != [ ] then
+        "${pluginsDir}/share/neo4j/plugins"
+      else if cfg.directories.plugins != null then
+        cfg.directories.plugins
+      else
+        "${cfg.directories.home}/plugins"
+    }
     server.directories.lib=${cfg.package}/share/neo4j/lib
     ${lib.optionalString (cfg.constrainLoadCsv) ''
       server.directories.import=${cfg.directories.imports}
@@ -207,6 +219,14 @@ in
 
     package = lib.mkPackageOption pkgs "neo4j" { };
 
+    plugins = lib.mkOption {
+      type = lib.types.listOf lib.types.package;
+      default = [ ];
+      description = ''
+        List of Neo4j plugins to install.
+      '';
+    };
+
     readOnly = lib.mkOption {
       type = lib.types.bool;
       default = false;
@@ -352,9 +372,8 @@ in
       };
 
       plugins = lib.mkOption {
-        type = lib.types.path;
-        default = "${cfg.directories.home}/plugins";
-        defaultText = lib.literalExpression ''"''${config.${opt.directories.home}}/plugins"'';
+        type = lib.types.nullOr lib.types.path;
+        default = null;
         description = ''
           Path of the database plugin directory. Compiled Java JAR files that
           contain database procedures will be loaded if they are placed in
@@ -363,6 +382,8 @@ in
           When setting this directory to something other than its default,
           ensure the directory's existence, and that read permission is
           given to the Neo4j daemon user `neo4j`.
+
+          Cannot be used at the same time as {option}`services.neo4j.plugins`.
         '';
       };
     };
@@ -656,6 +677,10 @@ in
     lib.mkIf cfg.enable {
       assertions = [
         {
+          assertion = cfg.plugins == [ ] || cfg.directories.plugins == null;
+          message = "Cannot define both `services.neo4j.plugins` and `services.neo4j.directories.plugins`.";
+        }
+        {
           assertion = !lib.elem "legacy" policyNameList;
           message = "The policy 'legacy' is special to Neo4j, and its name is reserved.";
         }
@@ -687,7 +712,7 @@ in
         preStart = ''
           # Directories Setup
           #   Always ensure home exists with nested conf, logs directories.
-          mkdir -m 0700 -p ${cfg.directories.home}/{conf,logs}
+          mkdir -m 0700 -p ${cfg.directories.home}/{conf,logs,plugins}
 
           #   Create other sub-directories and policy directories that have been left at their default.
           ${lib.concatMapStringsSep "\n" (dir: ''
