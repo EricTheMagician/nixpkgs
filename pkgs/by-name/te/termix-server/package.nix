@@ -35,12 +35,12 @@ buildNpmPackage (finalAttrs: {
   # Skip default build script - we'll run manual steps
   dontNpmBuild = true;
 
-  # Manually build backend only
+  # Build both frontend and backend
   buildPhase = ''
     runHook preBuild
 
-    # Compile TypeScript for backend
-    npx tsc -p tsconfig.node.json
+    # Build frontend (React app) and backend
+    npm run build
 
     # Rebuild better-sqlite3 native bindings
     npm rebuild better-sqlite3
@@ -63,9 +63,15 @@ buildNpmPackage (finalAttrs: {
     cp -r dist/backend $out/share/termix/
     cp -r dist $out/share/termix/
     cp -r node_modules $out/share/termix/
-    cp -r html $out/share/termix/ 2>/dev/null || true
     cp -r public $out/share/termix/ 2>/dev/null || true
     cp package.json $out/share/termix/
+
+    # Copy built frontend to html directory (Vite builds to dist)
+    cp -r dist/* $out/share/termix/html/
+
+    # Copy locales and fonts
+    cp -r src/locales $out/share/termix/html/
+    cp -r public/fonts $out/share/termix/html/
 
     runHook postInstall
   '';
@@ -74,8 +80,6 @@ buildNpmPackage (finalAttrs: {
   postFixup = ''
     makeWrapper ${nodejs}/bin/node $out/bin/termix \
       --set NODE_ENV production \
-      --set-default DATA_DIR $out/share/termix/data \
-      --set-default PORT 8080 \
       --chdir $out/share/termix \
       --add-flags $out/share/termix/dist/backend/backend/starter.js
   '';

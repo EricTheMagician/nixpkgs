@@ -1,11 +1,17 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 with lib;
 
 let
   cfg = config.services.termix-server;
   defaultUser = "termix";
-in {
+in
+{
   options.services.termix-server = {
     enable = mkEnableOption "the Termix server";
 
@@ -17,11 +23,12 @@ in {
       description = "Open ports in the firewall for the server.";
     };
 
-    port = mkOption {
-      type = types.port;
-      default = 8080;
-      description = "Listening port.";
-    };
+    # Note: Termix actually uses multiple hardcoded ports (30001-30007), so this option is not used
+    # port = mkOption {
+    #   type = types.port;
+    #   default = 8080;
+    #   description = "Listening port.";
+    # };
 
     dataDir = mkOption {
       type = types.path;
@@ -56,19 +63,28 @@ in {
   };
 
   config = mkIf cfg.enable {
-    users.users = optionalAttrs (cfg.user == defaultUser) {
-      ${defaultUser} = {
+    networking.firewall = mkIf cfg.openFirewall {
+      allowedTCPPorts = [
+        30001
+        30002
+        30003
+        30004
+        30005
+        30006
+        30007
+      ];
+    };
+
+    # Create user/group only if custom values are specified
+    users.users = mkIf (cfg.user != defaultUser) {
+      "${cfg.user}" = {
         isSystemUser = true;
-        group = defaultUser;
+        group = cfg.group;
       };
     };
 
-    users.groups = optionalAttrs (cfg.group == defaultUser) {
-      ${defaultUser} = { };
-    };
-
-    networking.firewall = mkIf cfg.openFirewall {
-      allowedTCPPorts = [ cfg.port ];
+    users.groups = mkIf (cfg.group != defaultUser) {
+      "${cfg.group}" = { };
     };
 
     systemd.services.termix-server = {
@@ -76,21 +92,26 @@ in {
       wantedBy = [ "multi-user.target" ];
       after = [ "network.target" ];
       environment = {
-        DATA_DIR = cfg.dataDir;
+        DATA_DIR = if cfg.user == defaultUser then "%S/termix" else cfg.dataDir;
         PORT = toString cfg.port;
         NODE_ENV = "production";
       };
       serviceConfig = mkMerge [
         {
-          User = if cfg.user == defaultUser then defaultUser else cfg.user;
-          Group = if cfg.group == defaultUser then defaultUser else cfg.group;
+          User = cfg.user;
+          Group = cfg.group;
           ExecStart = "${cfg.package}/bin/termix";
           PrivateTmp = true;
           Restart = "always";
-          WorkingDirectory = cfg.dataDir;
-          DynamicUser = if cfg.user == defaultUser then true else false;
-          StateDirectory = if (cfg.dataDir == "/var/lib/termix") && (cfg.user == defaultUser) then "termix" else null;
+          WorkingDirectory = if cfg.user == defaultUser then "%S/termix" else cfg.dataDir;
         }
+        (mkIf (cfg.user == defaultUser) {
+          DynamicUser = true;
+          StateDirectory = "termix";
+        })
+        (mkIf (cfg.dataDir == "/var/lib/termix" && cfg.user != defaultUser) {
+          StateDirectory = "termix";
+        })
       ];
     };
   };
