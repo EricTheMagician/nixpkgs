@@ -67,11 +67,14 @@ buildNpmPackage (finalAttrs: {
     cp package.json $out/share/termix/
 
     # Copy built frontend to html directory (Vite builds to dist)
-    cp -r dist/* $out/share/termix/html/
+    cp -r dist $out/share/termix/html/
 
     # Copy locales and fonts
     cp -r src/locales $out/share/termix/html/
     cp -r public/fonts $out/share/termix/html/
+
+    # Copy nginx configuration from docker
+    cp -r docker/nginx*.conf $out/share/termix/nginx/
 
     runHook postInstall
   '';
